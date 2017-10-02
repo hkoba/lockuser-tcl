@@ -17,8 +17,7 @@ snit::type lockuser {
     option -user
     option -home /home
 
-    option -target {procmailrc mailaliases}
-    # TODO: usermod -L, dot.ssh
+    option -target {usermod dotssh procmailrc mailaliases}
 
     #========================================
 
@@ -101,6 +100,60 @@ snit::type lockuser {
             error "Please specify -user!"
         }
         return $options(-home)/$options(-user)
+    }
+
+    #========================================
+    # usermod
+    #========================================
+
+    option -shadow /etc/shadow
+
+    method {usermod test} {} {
+        set entry [$self passwd find $options(-user) $options(-shadow)]
+        if {$entry eq ""} {
+            list NG msg "No such user"
+        } elseif {[string index [lindex $entry 1] 0] ne "!"} {
+            list NG msg "Not locked"
+        } else {
+            list OK msg "already locked"
+        }
+    }
+
+    method {usermod action} {} {
+        $self do exec usermod -L $options(-user)
+    }
+
+    method {passwd find} {user file} {
+        foreach line [read_file_lines $file] {
+            set items [split $line :]
+            if {[lindex $items 0] eq $user} {
+                return $items
+            }
+        }
+    }
+
+    #========================================
+    # dotssh
+    #========================================
+
+    method {dotssh filename} {} {
+        return [$self home]/.ssh
+    }
+
+    method {dotssh test} {} {
+        set fn [$self dotssh filename]
+        if {[file exists $fn]} {
+            list NG fn $fn msg "should be removed"
+        } else {
+            list OK fn $fn msg "already removed"
+        }
+    }
+
+    method {dotssh action} {} {
+        set fn [$self dotssh filename]
+        set newFn [file join [file dirname $fn] dot[file tail $fn]]
+        
+        $self do file rename $fn $newFn
     }
 
     #========================================
